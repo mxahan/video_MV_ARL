@@ -605,7 +605,7 @@ def get_data_test(idx= None):
     # ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3, x_v1_hf, x_v1_br, x_v1_snp, xNIra), axis = 0), -1, -4)
     
     ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3), axis = 0), -1, -4)
-    return ret.astype(np.float32)/255.
+    return ret.astype(np.float32)/255.0
 
 #%% Preparing test dataset
 a = np.int16([0, 1650 , 3240, 4530, 6240,7980,9180,10980, 11580,12030])
