@@ -5,7 +5,6 @@
 #import tensorflow as tf
 
 import os
-
 #os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 #os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -72,69 +71,88 @@ hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 # https://www.pyimagesearch.com/2015/11/09/pedestrian-detection-opencv/
 # https://data-flair.training/blogs/python-project-real-time-human-detection-counting/
 
-data = []
-im_size = (400,400)
 
-cap = cv2.VideoCapture(files[2])
-
-import pdb
-
-time.sleep(1.0)
-fps = FPS().start()
-
-while(cap.isOpened()):
-    ret, gray = cap.read()
+def get_all_frame(files, im_size = (400,400),  slice_info = None):
+    data = []
     
-    if ret==False:
-        break
+    cap = cv2.VideoCapture(files)
+    
+    import pdb
+    
+    time.sleep(1.0)
+    fps = FPS().start()
+    
+    while(cap.isOpened()):
+        ret, gray = cap.read()
+        
+        if ret==False:
+            break
+    
+        # pdb.set_trace()
+        if slice_info==None:
+            gray =  gray[:,:,:]
+        else: 
+            gray  = gray[slice_info]
+        # gray[150:900,410:1200,:]     
+       
+        gray = cv2.resize(gray, im_size) 
+        
+        # pdb.set_trace()
+        
+        # gray = cv2.rotate(gray, cv2.ROTATE_90_CLOCKWISE)
+    
+        gray = cv2.cvtColor(gray, cv2.COLOR_BGR2RGB)
+        
+        # boxes, weights = hog.detectMultiScale(gray, winStride=(4,4), scale = 1.03 ) #may add padding
+        # boxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
+        # for (xA, yA, xB, yB) in boxes:
+        #     cv2.rectangle(gray, (xA, yA), (xB, yB),
+        #                       (0, 255, 0), 2)
+        
+        
+        data.append(gray)
+        
+        # pdb.set_trace([]
+    
+        cv2.imshow('frame', gray)
+        
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    
+    
+    fps.stop()
+    print("[INFO] elasped time: {:.2f}".format(fps.elapsed()))
+    print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
+    # do a bit of cleanup
+    
+    
+    fps = cap.get(cv2.CAP_PROP_FPS)
+        
+    cap.release()
+    cv2.destroyAllWindows()
+    data =  np.array(data)
+    return data
 
-    # pdb.set_trace()
-    gray  = gray[:,:,:]
-    # gray[150:900,410:1200,:]     
-   
-    gray = cv2.resize(gray, im_size) 
-    
-    # pdb.set_trace()
-    
-    # gray = cv2.rotate(gray, cv2.ROTATE_90_CLOCKWISE)
 
-    gray = cv2.cvtColor(gray, cv2.COLOR_BGR2RGB)
-    
-    boxes, weights = hog.detectMultiScale(gray, winStride=(4,4), scale = 1.03 ) #may add padding
-    boxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
-    for (xA, yA, xB, yB) in boxes:
-        cv2.rectangle(gray, (xA, yA), (xB, yB),
-                          (0, 255, 0), 2)
-    
-    
-    data.append(gray)
-    
-    # pdb.set_trace([]
+data =[]
+slice_info =  [(slice(10, 1050), slice(600, 1800)), None, (slice(150, 900), slice(410,1200))]
 
-    cv2.imshow('frame', gray)
+for i in range(3):
+    data.append(get_all_frame(files[i], im_size=(160,160), slice_info=slice_info[i]))
     
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-
-fps.stop()
-print("[INFO] elasped time: {:.2f}".format(fps.elapsed()))
-print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
-# do a bit of cleanup
-
-
-fps = cap.get(cv2.CAP_PROP_FPS)
     
-cap.release()
-cv2.destroyAllWindows()
-data =  np.array(data)
+
+stFr = [5808, 1016, 382]
+
+for i in range(3):
+    data[0]= data[0][stFr[i]:]
 
 #%% Data Analysis
 
 print(data.nbytes)
 print(data.shape) 
 
-dr_data = data[382:]
+# dr_data = data[382:]
 
 
 #sp_data
@@ -154,13 +172,13 @@ input("pickle save ahead")
 # Saving 
 
 
-with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27.pkl', 'wb') as f:
-    pickle.dump([sp_data, ac_data, dr_data], f)  #NickName: SAD
+with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27_160_160.pkl', 'wb') as f:
+    pickle.dump(data_temp, f)  #NickName: SAD
 
 
 # Loading 
 
-with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27.pkl', 'rb') as f:
+with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27_160_160.pkl', 'rb') as f:
     sp, ac, dr = pickle.load(f)
     
     
@@ -239,8 +257,94 @@ data1 =  np.array(data1)
 
 '''
 
-#%% Pytorch DataLoader [very Crutial]
+#%% Augmentations
 
+
+# Brighness augmentation video, input shape # frame number, H, W, C
+
+def brightness_augment(img, factor=0.5): 
+    rgb = img.copy()
+    for i in range(img.shape[0]):
+        hsv = cv2.cvtColor(img[i], cv2.COLOR_RGB2HSV) #convert to hsv
+        hsv = np.array(hsv, dtype=np.float64)
+        hsv[:, :, 2] = hsv[:, :, 2] * (factor) #scale channel V uniformly
+        hsv[:, :, 2][hsv[:, :, 2] > 255] = 255 #reset out of range values
+        rgb[i] = cv2.cvtColor(np.array(hsv, dtype=np.uint8), cv2.COLOR_HSV2RGB)
+    return rgb
+
+
+
+
+# Salt and Papper Noise 
+import PIL
+
+class SaltAndPepperNoise(object):
+    r""" Implements 'Salt-and-Pepper' noise
+    Adding grain (salt and pepper) noise
+    (https://en.wikipedia.org/wiki/Salt-and-pepper_noise)
+
+    assumption: high values = white, low values = black
+    
+    Inputs:
+            - threshold (float):
+            - imgType (str): {"cv2","PIL"}
+            - lowerValue (int): value for "pepper"
+            - upperValue (int): value for "salt"
+            - noiseType (str): {"SnP", "RGB"}
+    Output:
+            - image ({np.ndarray, PIL.Image}): image with 
+                                               noise added
+    """
+    def __init__(self,
+                 treshold:float = 0.005,
+                 imgType:str = "cv2",
+                 lowerValue:int = 5,
+                 upperValue:int = 250,
+                 noiseType:str = "SnP"):
+        self.treshold = treshold
+        self.imgType = imgType
+        self.lowerValue = lowerValue # 255 would be too high
+        self.upperValue = upperValue # 0 would be too low
+        if (noiseType != "RGB") and (noiseType != "SnP"):
+            raise Exception("'noiseType' not of value {'SnP', 'RGB'}")
+        else:
+            self.noiseType = noiseType
+        super(SaltAndPepperNoise).__init__()
+
+    def __call__(self, img1):
+        img = img1.copy()
+        if self.imgType == "PIL":
+            img = np.array(img)
+        if type(img) != np.ndarray:
+            raise TypeError("Image is not of type 'np.ndarray'!")
+        
+        if self.noiseType == "SnP":
+            random_matrix = np.random.rand(img.shape[0],img.shape[1])
+            img[random_matrix>=(1-self.treshold)] = self.upperValue
+            img[random_matrix<=self.treshold] = self.lowerValue
+        elif self.noiseType == "RGB":
+            random_matrix = np.random.random(img.shape)      
+            img[random_matrix>=(1-self.treshold)] = self.upperValue
+            img[random_matrix<=self.treshold] = self.lowerValue
+        
+        
+
+        if self.imgType == "cv2":
+            return img
+        elif self.imgType == "PIL":
+            # return as PIL image for torchvision transforms compliance
+            return PIL.Image.fromarray(img)
+
+# Define the SNP noises for video 
+
+def snp_RGB(vid_fr):
+    vid_sn = vid_fr.copy()
+    RGB_noise = SaltAndPepperNoise(noiseType="RGB")
+    for i in range(vid_fr.shape[0]):
+        vid_sn[i] = RGB_noise(vid_fr[i])
+    return vid_sn 
+    
+#%% Pytorch DataLoader [very Crutial]
 
 
 class dataPrep(Dataset):
@@ -261,37 +365,61 @@ class dataPrep(Dataset):
     def get_data1(self):
         
         # Time Positives
+
         idx = randint(0,len(temp[0])-100)
-        x_v1 = torch.from_numpy(temp[0][idx:idx+16])
-        x_v2 = torch.from_numpy(temp[1][idx:idx+16])
-        x_v3 = torch.from_numpy(temp[2][idx:idx+16])
+
         
-        # Augmentation Positive 
         
-        x_v1_hf = torch.from_numpy(np.flip(x_v1, axis = 2))
+        x_v1 = temp[0][idx:idx+16]
+        x_v2 = temp[1][idx:idx+16]
+        x_v3 = temp[2][idx:idx+16]
+        
+        # Augmentation Positive
+        
+        # Horizontal flip 
+        x_v1_hf = np.flip(x_v3, axis = 2)
+        x_v1_br = brightness_augment(x_v1, factor = 1.5)
+        
+        x_v1_snp =  snp_RGB(x_v1)
         
         
         # Time Negatives 
         idx_n =  randint(0,len(temp[0])-100)
-        while abs(idx-idx_n)>1200: idx_n = randint(0,len(temp[0])-100)
+        while abs(idx-idx_n)<1200: idx_n = randint(0,len(temp[0])-100)
         
-        xNIra =  torch.from_numpy(temp[0][idx_n:idx_n+16]) # intra negative 
+        xNIra =  temp[0][idx_n:idx_n+16] # intra negative 
         
         # Augmentation Negative 
         
         # use tensor append option
         
-        return torch.stack((x_v1, x_v2, x_v3, x_v1_hf, xNIra))
+        # ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3, x_v1_hf, x_v1_br, x_v1_snp, xNIra), axis = 0), -1, -4)
+        
+        ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3), axis = 0), -1, -4)
+        return ret.astype(np.float32)/255.
+    
+# change the data shape using torch.moveaxis, numpy.moveaxis
+# https://pytorch.org/docs/stable/generated/torch.moveaxis.html
+# https://numpy.org/doc/stable/reference/generated/numpy.moveaxis.html
+
+
+
 
 # sampling for SIMCLR
 
 
-with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27.pkl', 'rb') as f:
+
+#%% Dataset Loader 
+
+with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27_160_160.pkl', 'rb') as f:
     temp = pickle.load(f)
 
 dataSet =  dataPrep(temp)
 
-data_loader = DataLoader(dataSet, batch_size=4, shuffle=True, num_workers=4)
+data_loader = DataLoader(dataSet, batch_size=1, shuffle=False, num_workers=2, pin_memory=True)
+
+# %%
+sample = next(iter(data_loader))
 
 
 #%% Dataloader Check 
@@ -299,12 +427,247 @@ data_loader = DataLoader(dataSet, batch_size=4, shuffle=True, num_workers=4)
 for i in data_loader:
     break
 
-#%% Manual DataLoader
+#%% Random Loss function 
+import torch.nn as nn
+import torch.nn.functional as F
+
+class ContrastiveLoss(nn.Module):
+    """
+    Contrastive loss
+    Takes embeddings of two samples and a target label == 1 if samples are from the same class and label == 0 otherwise
+    """
+    def __init__(self, margin):
+        super(ContrastiveLoss, self).__init__()
+        self.margin = margin
+        self.eps = 1e-9
+
+    def forward(self, output1, output2, target, size_average=True):
+        distances = (output2 - output1).pow(2).sum(1)  # squared distances
+        losses = 0.5 * (target.float() * distances +
+                        (1 + -1 * target).float() * F.relu(self.margin - (distances + self.eps).sqrt()).pow(2))
+        return losses.mean() if size_average else losses.sum()   
+
+loss = ContrastiveLoss(0.5)
+#%% Network C3D
+
+from C3D_model import C3D
+net = C3D()
+
+# model Summary
+
+input_shape = (3,16,112,112)
+
+from torchsummary import  summary
+
+print(summary(net, input_shape))
+
+#%% Network P3D
+
+from p3D_net import P3D63, P3D131, P3D199
+
+# net = P3D63(num_classes= 400)
+
+net = P3D199(True, 'RGB',num_classes=400)
+
+net = net.cuda()
+
+input_shape = (3,16,160,160)
+
+from torchsummary import  summary
+
+print(summary(net, input_shape))
+
+#%% Load Weight
+net.load_state_dict(torch.load('../../Saved_models/c3d.pickle'))
+
+net.cuda()
+
+#%% Optimizer 
+
+optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
+
+#%% Check devices
+
+sample = sample.cuda()
+#%% Data inference
+
+# jj =  (i[1].float()/255.0).cuda()
 
 
-def get_data():
-    idx = randint(0,len(temp[0])-100)
-    x_v1 = torch.from_numpy(temp[0][idx:idx+16])
-    x_v2 = torch.from_numpy(temp[1][idx:idx+16])
-    x_v3 = torch.from_numpy(temp[2][idx:idx+16])
-    return torch.stack((x_v1, x_v2, x_v3))
+
+# https://discuss.pytorch.org/t/how-to-delete-a-tensor-in-gpu-to-free-up-memory/48879/15
+
+# with torch.no_grad():
+#%% 
+
+z= torch.from_numpy(np.array(1))
+
+z = z.cuda()
+
+
+
+for sample in data_loader:    
+    sample = sample.cuda()
+    optimizer.zero_grad()   # zero the gradient buffers
+    output = net(sample[0])
+    loss1 = loss(output[:1], output[1:2],z)
+    loss1.backward()
+    optimizer.step()   #%%
+    print('jj /n')
+
+
+#%% test for clustering 
+data_o = []
+j = 0
+for sample in data_loader:
+    sample = sample.cuda()
+    with torch.no_grad():
+        output = net(sample[0])
+    j = j +1
+    data_o.append(output.cpu().numpy())
+    
+    if j>5:
+        break
+    
+data_o = np.array(data_o)
+
+data_o1 = data_o.reshape((j*3,487))
+#%% Test format (labeled)
+
+
+
+#%% Embedding Plot
+from sklearn.manifold import TSNE
+
+X_embedded = TSNE(n_components=2).fit_transform(data_o1)
+
+label3 = np.int16([ i for i in range(90*3)])%3
+
+
+fig, ax = plt.subplots()
+cdict = {0: 'red', 1: 'blue', 2: 'green'}
+for g in np.unique(label3):
+    ix = np.where(label3 == g)
+    ax.scatter(X_embedded[ix,0], X_embedded[ix,1], c = cdict[g], label = g, s = 100)
+
+
+#%% Ploting 
+
+sample = next(iter(data_loader))
+
+jj =  (sample[0]).cuda()
+plt.imshow(np.moveaxis((jj[0,:,0,:,:]).cpu().numpy(), 0,2), vmin=0., vmax=1.)
+
+#%% Clear Memory for torch (GPU memory release)
+# del output
+# del jj 
+# del net
+
+torch.cuda.empty_cache()
+
+# check  devices 
+next(net.parameters()).is_cuda
+next(net.parameters()).device
+
+#%% Manual DataLoader (Not useful)
+
+def get_data_test(idx= None):
+    
+    # Time Positives
+    if idx ==None:
+        idx = randint(0,len(temp[0])-100)
+
+    
+    
+    x_v1 = temp[0][idx:idx+16]
+    x_v2 = temp[1][idx:idx+16]
+    x_v3 = temp[2][idx:idx+16]
+    
+    # Augmentation Positive
+    
+    # Horizontal flip 
+    x_v1_hf = np.flip(x_v3, axis = 2)
+    x_v1_br = brightness_augment(x_v1, factor = 1.5)
+    
+    x_v1_snp =  snp_RGB(x_v1)
+    
+    
+    # Time Negatives 
+    idx_n =  randint(0,len(temp[0])-100)
+    while abs(idx-idx_n)<1200: idx_n = randint(0,len(temp[0])-100)
+    
+    xNIra =  temp[0][idx_n:idx_n+16] # intra negative 
+    
+    # Augmentation Negative 
+    
+    # use tensor append option
+    
+    # ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3, x_v1_hf, x_v1_br, x_v1_snp, xNIra), axis = 0), -1, -4)
+    
+    ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3), axis = 0), -1, -4)
+    return ret.astype(np.float32)/255.
+
+#%% Preparing test dataset
+a = np.int16([0, 1650 , 3240, 4530, 6240,7980,9180,10980, 11580,12030])
+
+
+
+data_t =[]
+data_lab = []
+
+
+for i in range(a.shape[0]-1):
+    for _ in range(10):
+        sample = torch.from_numpy(get_data_test(randint(a[i], a[i+1])))
+        sample = sample.cuda()
+        with torch.no_grad():
+            output = net(sample)
+        data_t.append(output.cpu().numpy())
+        data_lab.append([i,i,i])
+
+#%%
+
+data_t = np.array(data_t)
+data_lab = np.int16(data_lab)
+
+
+data_t = data_t.reshape((90*3,400))
+data_lab = data_lab.reshape((90*3,1))
+
+
+#%% TSNE PLOT
+
+from sklearn.manifold import TSNE
+
+label3 = np.int16([ i for i in range(90*3)])%3
+
+def tsne_plot(data = data_t, n_comp = 2, label = label3):
+    X_embedded = TSNE(n_components=n_comp, verbose=1).fit_transform(data)
+    
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    if n_comp == 3:ax = fig.add_subplot(projection ='3d')
+    
+    # cdict = {0: 'red', 1: 'blue', 2: 'green'}
+    
+    markers = ['v', 'x', 'o', '.', '>', '<', '1', '2', '3']
+    
+    for i, g in enumerate(np.unique(label)):
+        ix = np.where(label == g)
+        if n_comp==3:
+            ax.scatter(X_embedded[ix,0], X_embedded[ix,1], X_embedded[ix,2], marker = markers[i], label = g, alpha = 0.8)
+        else:
+            ax.scatter(X_embedded[ix,0], X_embedded[ix,1], marker = markers[i], label = g, alpha = 0.8)
+    
+    ax.set_xlabel('X Label')
+    ax.set_ylabel('Y Label')
+    if n_comp==3:ax.set_zlabel('Z Label')
+    
+    ax.legend(fontsize='large', markerscale=2)
+    plt.show()
+    
+    
+    
+tsne_plot(data_t, 2, data_lab)
+    
+    
