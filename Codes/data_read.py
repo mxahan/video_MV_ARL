@@ -418,16 +418,16 @@ dataSet =  dataPrep(temp)
 
 data_loader = DataLoader(dataSet, batch_size=1, shuffle=False, num_workers=2, pin_memory=True)
 
-# %%
-sample = next(iter(data_loader))
-
 
 #%% Dataloader Check 
+
+sample = next(iter(data_loader))
+
 
 for i in data_loader:
     break
 
-#%% Random Loss function 
+#%% Random Loss function (add all the loss functions)
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -451,36 +451,43 @@ loss = ContrastiveLoss(0.5)
 #%% Network C3D
 
 from C3D_model import C3D
-net = C3D()
-
-# model Summary
-
-input_shape = (3,16,112,112)
-
-from torchsummary import  summary
-
-print(summary(net, input_shape))
-
-#%% Network P3D
-
 from p3D_net import P3D63, P3D131, P3D199
-
-# net = P3D63(num_classes= 400)
-
-net = P3D199(True, 'RGB',num_classes=400)
-
-net = net.cuda()
-
-input_shape = (3,16,160,160)
-
 from torchsummary import  summary
 
-print(summary(net, input_shape))
+#%% Input Model name
 
-#%% Load Weight
-net.load_state_dict(torch.load('../../Saved_models/c3d.pickle'))
+ModName = input("Input your model name C3D, P3D199, P3D63, P3D131 \n")
 
-net.cuda()
+def str_to_class(ModelName):
+    return getattr(sys.modules[__name__], ModelName)
+
+ModelName = str_to_class(ModName)
+
+if ModName == 'C3D':
+    net = ModelName()
+    net.load_state_dict(torch.load('../../Saved_models/c3d.pickle'))
+    net = net.cuda()
+    input_shape = (3,16,112,112)
+    print(summary(net, input_shape))
+
+elif ModName == 'P3D199':
+    net = ModelName(True, 'RGB',num_classes=400)
+    net = net.cuda()
+    input_shape = (3,16,160,160)
+    print(summary(net, input_shape))
+
+elif ModName == 'P3D63' or ModName == 'P3D131':
+    net = ModelName(num_classes=400)
+    net = net.cuda()
+    input_shape = (3,16,160,160)
+    print(summary(net, input_shape))
+
+
+#%% Removing layer from the mdoel 
+
+## good link : https://discuss.pytorch.org/t/how-to-delete-layer-in-pretrained-model/17648
+## https://discuss.pytorch.org/t/how-can-l-load-my-best-model-as-a-feature-extractor-evaluator/17254/6
+
 
 #%% Optimizer 
 
