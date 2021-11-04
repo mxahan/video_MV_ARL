@@ -1,5 +1,9 @@
 # Import libraries 
 
+#%% libraries
+
+
+#import tensorflow as tf
 
 import os
 #os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
@@ -46,6 +50,155 @@ import numpy as np
 import argparse
 import imutils
 import time
+
+#%% Directory load data
+
+files = []
+
+path_dir = '../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27/'
+
+dataPath = os.path.join(path_dir, '*.mp4')
+files = glob.glob(dataPath)  # care about the serialization
+
+
+dataPath = os.path.join(path_dir, '*.MP4')
+
+files.extend(glob.glob(dataPath))  # care about the serialization
+
+#%% Import data
+
+
+hog = cv2.HOGDescriptor()
+hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+
+# https://www.pyimagesearch.com/2015/11/09/pedestrian-detection-opencv/
+# https://data-flair.training/blogs/python-project-real-time-human-detection-counting/
+
+
+def get_all_frame(files, im_size = (400,400),  slice_info = None):
+    data = []
+    
+    cap = cv2.VideoCapture(files)
+    
+    import pdb
+    
+    time.sleep(1.0)
+    fps = FPS().start()
+    
+    while(cap.isOpened()):
+        ret, gray = cap.read()
+        
+        if ret==False:
+            break
+    
+        # pdb.set_trace()
+        if slice_info==None:
+            gray =  gray[:,:,:]
+        else: 
+            gray  = gray[slice_info]
+        # gray[150:900,410:1200,:]     
+       
+        gray = cv2.resize(gray, im_size) 
+        
+        # pdb.set_trace()
+        
+        # gray = cv2.rotate(gray, cv2.ROTATE_90_CLOCKWISE)
+    
+        gray = cv2.cvtColor(gray, cv2.COLOR_BGR2RGB)
+        
+        # boxes, weights = hog.detectMultiScale(gray, winStride=(4,4), scale = 1.03 ) #may add padding
+        # boxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
+        # for (xA, yA, xB, yB) in boxes:
+        #     cv2.rectangle(gray, (xA, yA), (xB, yB),
+        #                       (0, 255, 0), 2)
+        
+        
+        data.append(gray)
+        
+        # pdb.set_trace([]
+    
+        cv2.imshow('frame', gray)
+        
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    
+    
+    fps.stop()
+    print("[INFO] elasped time: {:.2f}".format(fps.elapsed()))
+    print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
+    # do a bit of cleanup
+    
+    
+    fps = cap.get(cv2.CAP_PROP_FPS)
+        
+    cap.release()
+    cv2.destroyAllWindows()
+    data =  np.array(data)
+    return data
+
+
+data =[]
+slice_info =  [(slice(10, 1050), slice(600, 1800)), None, (slice(150, 900), slice(410,1200))]
+
+for i in range(3):
+    data.append(get_all_frame(files[i], im_size=(160,160), slice_info=slice_info[i]))
+    
+    
+
+stFr = [5808, 1016, 382]
+
+for i in range(3):
+    data[0]= data[0][stFr[i]:]
+
+#%% Data Analysis
+
+print(data.nbytes)
+print(data.shape) 
+
+# dr_data = data[382:]
+
+
+#sp_data
+#ac_data
+#dr_data
+
+
+# data_pre =  [sp_data, ac_data, dr_data] # Keep the order as it is
+
+
+#%% Data Save Option
+
+# https://machinelearningmastery.com/how-to-save-a-numpy-array-to-file-for-machine-learning/
+
+## Quick save an load "PICKLE"
+input("pickle save ahead")
+# Saving 
+
+
+with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27_160_160.pkl', 'wb') as f:
+    pickle.dump(data_temp, f)  #NickName: SAD
+
+
+# Loading 
+
+with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27_160_160.pkl', 'rb') as f:
+    sp, ac, dr = pickle.load(f)
+    
+    
+## Data Frame Option (not good option as CSV turns things to string)
+
+# dict = {'sp': [sp_data], 'ac': [ac_data], 'dr': [dr_data]}
+# df = pd.DataFrame(dict)
+
+# df.to_csv('file_name.csv')
+
+# df1 =  pd.read_csv('file_name.csv')
+
+# sp = np.array(df1['sp'])
+
+
+#device = torch.device('cuda:0')
+
 #%% Prepare Data Loader
 
 #%% Cuda Determinstic 
@@ -172,7 +325,7 @@ class dataPrep(Dataset):
         
         # Time Positives
 
-        idx = randint(0,len(temp[1])-100)
+        idx = randint(0,len(temp[0])-100)
 
         
         
@@ -222,7 +375,7 @@ with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27_160_160.pkl', 'rb') 
 
 dataSet =  dataPrep(temp)
 
-data_loader = DataLoader(dataSet, batch_size=1, shuffle=False, num_workers=1, pin_memory=True)
+data_loader = DataLoader(dataSet, batch_size=1, shuffle=False, num_workers=2, pin_memory=True)
 
 
 #%% Dataloader Check 
@@ -262,7 +415,7 @@ class ContrastiveLoss2(nn.Module):
     
     
     
-loss = ContrastiveLoss(1)
+loss = ContrastiveLoss(0.5)
 
 
 #%% Network C3D
@@ -280,12 +433,6 @@ def str_to_class(ModelName):
 
 ModelName = str_to_class(ModName)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-# Assuming that we are on a CUDA machine, this should print a CUDA device:
-
-print(device)
-
 if ModName == 'C3D':
     net = ModelName()
     net.load_state_dict(torch.load('../../Saved_models/c3d.pickle'))
@@ -301,12 +448,12 @@ elif ModName == 'P3D199':
 
 elif ModName == 'P3D63' or ModName == 'P3D131':
     net = ModelName(num_classes=400)
-    net.to(device)
-    input_shape = (3,16,160,160)
-    print(summary(net, input_shape))
+    # net = net.cuda()
+    # input_shape = (3,16,160,160)
+    # print(summary(net, input_shape))
     
-   # more network here!!
-    #SLOWFAST
+    more network here!!
+    SLOWFAST
 
 
 #%% Removing layer from the mdoel 
@@ -345,8 +492,7 @@ z= torch.from_numpy(np.array(1))
 
 z = z.cuda()
 
-net = net.cuda()
-j = 0
+
 
 for sample in data_loader:    
     sample = sample.cuda()
@@ -354,10 +500,8 @@ for sample in data_loader:
     output = net(sample[0])
     loss1 = loss(output[:1], output[1:2],z)
     loss1.backward()
-    if j%1000==0:
-        print(loss1.cpu())
     optimizer.step()   #%%
-
+    print('jj /n')
 
 
 
