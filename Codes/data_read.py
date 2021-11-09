@@ -1,7 +1,6 @@
 # Import libraries 
-
-
 import os
+
 #os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 #os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -48,6 +47,8 @@ import imutils
 import time
 #%% Prepare Data Loader
 
+from data_set_loader import dataPrep
+
 #%% Cuda Determinstic 
 
 def set_deterministic(seed=42):
@@ -63,175 +64,32 @@ def set_deterministic(seed=42):
 seed = 42 # any number 
 set_deterministic(seed=seed)
 
-#%% Augmentations
-
-
-# Brighness augmentation video, input shape # frame number, H, W, C
-
-def brightness_augment(img, factor=0.5): 
-    rgb = img.copy()
-    for i in range(img.shape[0]):
-        hsv = cv2.cvtColor(img[i], cv2.COLOR_RGB2HSV) #convert to hsv
-        hsv = np.array(hsv, dtype=np.float64)
-        hsv[:, :, 2] = hsv[:, :, 2] * (factor) #scale channel V uniformly
-        hsv[:, :, 2][hsv[:, :, 2] > 255] = 255 #reset out of range values
-        rgb[i] = cv2.cvtColor(np.array(hsv, dtype=np.uint8), cv2.COLOR_HSV2RGB)
-    return rgb
-
-
-
-
-# Salt and Papper Noise 
-import PIL
-
-class SaltAndPepperNoise(object):
-    r""" Implements 'Salt-and-Pepper' noise
-    Adding grain (salt and pepper) noise
-    (https://en.wikipedia.org/wiki/Salt-and-pepper_noise)
-
-    assumption: high values = white, low values = black
-    
-    Inputs:
-            - threshold (float):
-            - imgType (str): {"cv2","PIL"}
-            - lowerValue (int): value for "pepper"
-            - upperValue (int): value for "salt"
-            - noiseType (str): {"SnP", "RGB"}
-    Output:
-            - image ({np.ndarray, PIL.Image}): image with 
-                                               noise added
-    """
-    def __init__(self,
-                 treshold:float = 0.005,
-                 imgType:str = "cv2",
-                 lowerValue:int = 5,
-                 upperValue:int = 250,
-                 noiseType:str = "SnP"):
-        self.treshold = treshold
-        self.imgType = imgType
-        self.lowerValue = lowerValue # 255 would be too high
-        self.upperValue = upperValue # 0 would be too low
-        if (noiseType != "RGB") and (noiseType != "SnP"):
-            raise Exception("'noiseType' not of value {'SnP', 'RGB'}")
-        else:
-            self.noiseType = noiseType
-        super(SaltAndPepperNoise).__init__()
-
-    def __call__(self, img1):
-        img = img1.copy()
-        if self.imgType == "PIL":
-            img = np.array(img)
-        if type(img) != np.ndarray:
-            raise TypeError("Image is not of type 'np.ndarray'!")
-        
-        if self.noiseType == "SnP":
-            random_matrix = np.random.rand(img.shape[0],img.shape[1])
-            img[random_matrix>=(1-self.treshold)] = self.upperValue
-            img[random_matrix<=self.treshold] = self.lowerValue
-        elif self.noiseType == "RGB":
-            random_matrix = np.random.random(img.shape)      
-            img[random_matrix>=(1-self.treshold)] = self.upperValue
-            img[random_matrix<=self.treshold] = self.lowerValue
-        
-        
-
-        if self.imgType == "cv2":
-            return img
-        elif self.imgType == "PIL":
-            # return as PIL image for torchvision transforms compliance
-            return PIL.Image.fromarray(img)
-
-# Define the SNP noises for video 
-
-def snp_RGB(vid_fr):
-    vid_sn = vid_fr.copy()
-    RGB_noise = SaltAndPepperNoise(noiseType="RGB")
-    for i in range(vid_fr.shape[0]):
-        vid_sn[i] = RGB_noise(vid_fr[i])
-    return vid_sn 
-    
-#%% Pytorch DataLoader [very Crutial]
-
-
-class dataPrep(Dataset):
-    def __init__(self, root_dir):
-        self.all_cam = root_dir
-        
-    def __len__(self):
-        return len(self.all_cam[0])
-        
-    def __getitem__(self,idx):
-        # x = self.all_cam[randint(0,2)][idx:idx+16]
-        # x = self.all_cam[0][idx:idx+16]
-        # y = self.all_cam[1][idx:idx+16]
-        # z = self.all_cam[2][idx:idx+16]
-        xx = self.get_data1()
-        return xx
-    
-    def get_data1(self):
-        
-        # Time Positives
-
-        idx = randint(0,len(temp[1])-100)
-
-        
-        
-        x_v1 = temp[0][idx:idx+16]
-        x_v2 = temp[1][idx:idx+16]
-        x_v3 = temp[2][idx:idx+16]
-        
-        # Augmentation Positive
-        
-        # Horizontal flip 
-        x_v1_hf = np.flip(x_v3, axis = 2)
-        x_v1_br = brightness_augment(x_v1, factor = 1.5)
-        
-        x_v1_snp =  snp_RGB(x_v1)
-        
-        
-        # Time Negatives 
-        idx_n =  randint(0,len(temp[0])-100)
-        while abs(idx-idx_n)<1200: idx_n = randint(0,len(temp[0])-100)
-        
-        xNIra =  temp[0][idx_n:idx_n+16] # intra negative 
-        
-        # Augmentation Negative 
-        
-        # use tensor append option
-        
-        # ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3, x_v1_hf, x_v1_br, x_v1_snp, xNIra), axis = 0), -1, -4)
-        
-        ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3), axis = 0), -1, -4)
-        return ret.astype(np.float32)/255.
-    
-# change the data shape using torch.moveaxis, numpy.moveaxis
-# https://pytorch.org/docs/stable/generated/torch.moveaxis.html
-# https://numpy.org/doc/stable/reference/generated/numpy.moveaxis.html
-
-
-
-
-# sampling for SIMCLR
 
 
 
 #%% Dataset Loader 
 
-with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27_160_160.pkl', 'rb') as f:
+with open('../../../../Dataset/ARL_MULTIVIEW_AR/Avijoy_8_26_21/_160_160.pkl', 'rb') as f:
     temp = pickle.load(f)
 
 dataSet =  dataPrep(temp)
 
 data_loader = DataLoader(dataSet, batch_size=1, shuffle=False, num_workers=1, pin_memory=True)
 
-
 #%% Dataloader Check 
 
 sample = next(iter(data_loader))
 
-
 for i in data_loader:
     break
+
+
+#%% Image Ploting  (nothing to do with the code)
+
+sample = next(iter(data_loader))
+
+jj =  (sample[0]).cuda()
+plt.imshow(np.moveaxis((jj[0,:,0,:,:]).cpu().numpy(), 0,2), vmin=0., vmax=1.)
 
 #%% Random Loss function (add all the loss functions)
 import torch.nn as nn
@@ -325,6 +183,10 @@ net.fc = Identity()
 ## good link : https://discuss.pytorch.org/t/how-to-delete-layer-in-pretrained-model/17648
 ## https://discuss.pytorch.org/t/how-can-l-load-my-best-model-as-a-feature-extractor-evaluator/17254/6
 
+#%%
+num_classes = 100
+
+net.fc = torch.nn.Linear(in_features=2048, out_features= num_classes )
 
 #%% Optimizer 
 
@@ -341,34 +203,35 @@ optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 # with torch.no_grad():
 #%% 
 
+import torch.nn as nn
+
 z= torch.from_numpy(np.array(1))
+
+L=  torch.nn.TripletMarginLoss(p = 2, margin = 5)
 
 z = z.cuda()
 
 net = net.cuda()
+sig_m =  nn.Sigmoid()
 j = 0
-
+import pdb
 for sample in data_loader:    
     sample = sample.cuda()
     optimizer.zero_grad()   # zero the gradient buffers
-    output = net(sample[0])
-    loss1 = loss(output[:1], output[1:2],z)
+    output = sig_m(net(sample[0]))
+    loss1 = L(output[0:1], output[1:2],output[2:3])
     loss1.backward()
-    if j%1000==0:
+    if j%500==0:
         print(loss1.cpu())
+        # pdb.set_trace()
     optimizer.step()   #%%
+    j= j+1
 
 
 
 
 
 
-#%% Image Ploting  (nothing to do with the code)
-
-sample = next(iter(data_loader))
-
-jj =  (sample[0]).cuda()
-plt.imshow(np.moveaxis((jj[0,:,0,:,:]).cpu().numpy(), 0,2), vmin=0., vmax=1.)
 
 #%% Clear Memory for torch (GPU memory release) (nothing to do with the code)
 # del output
@@ -414,8 +277,9 @@ def get_data_test(idx= None):
 
 #%% Preparing test dataset (change for every new dataset)
 # test result
-a = np.int16([0, 1650 , 3240, 4530, 6240,7980,9180,10980, 11580,12030])
+# a = np.int16([0, 1650 , 3240, 4530, 6240,7980,9180,10980, 11580,12030])
 
+a = np.int16([0, 36*30 , 76*30, 115*30, 156*30,201*30,270*30,316*30, 370*30,435*30])
 
 
 data_t =[]
@@ -497,6 +361,6 @@ def tsne_plot(data = data_t, n_comp = 2, label = label3):
 
     
     
-tsne_plot(data_t, 2, data_lab)
+tsne_plot(1/(1+np.exp(-data_t)), 2, data_lab)
     
     

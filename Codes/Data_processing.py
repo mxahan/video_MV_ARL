@@ -17,7 +17,6 @@ import os
 
 #os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-import torch 
 
 import pickle 
 import matplotlib.pyplot as plt
@@ -158,7 +157,7 @@ def get_all_frame(files, im_size = (400,400),  slice_info = None, pdb_info = Non
 
 #%% Debug mode
 
-data = get_all_frame(files[2], slice_info=(slice(100, 900), slice(100,1650), slice(0,3)), pdb_info=None)
+# data = get_all_frame(files[2], slice_info=(slice(100, 900), slice(100,1650), slice(0,3)), pdb_info=None)
 ### use pdb true to get the crop information\
 # plt.imshow(data[120])
 # plt.imshow(gray)
@@ -177,8 +176,8 @@ for i in range(3):
     
     
 
-# for i in range(3):
-#     data[i]= data[i][stFr[i]:]
+for i in range(3):
+    data[i]= data[i][stFr[i]:]
 
 #plt.imshow(data[1][5000])
 
