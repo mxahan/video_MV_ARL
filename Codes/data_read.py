@@ -1,6 +1,5 @@
 # Import libraries 
 import os
-
 #os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 #os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -184,13 +183,11 @@ net.fc = Identity()
 ## https://discuss.pytorch.org/t/how-can-l-load-my-best-model-as-a-feature-extractor-evaluator/17254/6
 
 #%%
-num_classes = 100
+num_classes = 10
 
 net.fc = torch.nn.Linear(in_features=2048, out_features= num_classes )
+net.cuda()
 
-#%% Optimizer 
-
-optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 
 #%% Data inference
 
@@ -201,37 +198,67 @@ optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 # https://discuss.pytorch.org/t/how-to-delete-a-tensor-in-gpu-to-free-up-memory/48879/15
 
 # with torch.no_grad():
+    
+#%% Manual test DataLoader (May Not useful)
+
+from data_set_loader import brightness_augment, snp_RGB
+from data_set_loader import test_data
+
 #%% 
 
 import torch.nn as nn
 
-z= torch.from_numpy(np.array(1))
 
-L=  torch.nn.TripletMarginLoss(p = 2, margin = 5)
+optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
+
+z= torch.from_numpy(np.array(1))
+from losses_PT import TripletLoss1, InfoNceLoss
+L= InfoNceLoss(1)
 
 z = z.cuda()
 
 net = net.cuda()
-sig_m =  nn.Sigmoid()
+tan_m =  nn.Tanh()
+
+
+
+#%% Training Loop 1
 j = 0
 import pdb
 for sample in data_loader:    
     sample = sample.cuda()
     optimizer.zero_grad()   # zero the gradient buffers
-    output = sig_m(net(sample[0]))
-    loss1 = L(output[0:1], output[1:2],output[2:3])
+    output = tan_m(net(sample[0]))
+    loss1 = L(output[0:1], output[1:2], output[2:3])
     loss1.backward()
+
+    optimizer.step()   #%%
     if j%500==0:
         print(loss1.cpu())
         # pdb.set_trace()
-    optimizer.step()   #%%
     j= j+1
 
 
 
 
 
+#%% Training Loop 1
 
+tdc =  test_data(temp)
+j = 0
+net.train()
+for _ in range(80000):
+    sample = torch.from_numpy(test_data.get_data_Triplet(None))
+    sample = sample.cuda()
+    optimizer.zero_grad()   # zero the gradient buffers
+    output = tan_m(net(sample))
+    loss1 = L(output[0:1], output[1:2],output[2:3])
+    loss1.backward()
+    if j%2000==0:
+        print(loss1.cpu())
+        # pdb.set_trace()
+    optimizer.step()   #%%
+    j= j+1
 
 #%% Clear Memory for torch (GPU memory release) (nothing to do with the code)
 # del output
@@ -244,41 +271,11 @@ torch.cuda.empty_cache()
 next(net.parameters()).is_cuda
 next(net.parameters()).device
 
-#%% Manual test DataLoader (May Not useful)
-
-def get_data_test(idx= None):
-    
-    # Time Positives
-    if idx ==None:
-        idx = randint(0,len(temp[0])-100)
-        
-    x_v1 = temp[0][idx:idx+16]
-    x_v2 = temp[1][idx:idx+16]
-    x_v3 = temp[2][idx:idx+16]
-    
-    # Augmentation Positive
-    # Horizontal flip 
-    x_v1_hf = np.flip(x_v3, axis = 2)
-    x_v1_br = brightness_augment(x_v1, factor = 1.5)
-    
-    x_v1_snp =  snp_RGB(x_v1)
-    # Time Negatives 
-    idx_n =  randint(0,len(temp[0])-100)
-    while abs(idx-idx_n)<1200: idx_n = randint(0,len(temp[0])-100)
-    
-    xNIra =  temp[0][idx_n:idx_n+16] # intra negative 
-    
-    # Augmentation Negative 
-    # use tensor append option
-    # ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3, x_v1_hf, x_v1_br, x_v1_snp, xNIra), axis = 0), -1, -4)
-    
-    ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3), axis = 0), -1, -4)
-    return ret.astype(np.float32)/255.0
 
 #%% Preparing test dataset (change for every new dataset)
 # test result
 # a = np.int16([0, 1650 , 3240, 4530, 6240,7980,9180,10980, 11580,12030])
-
+td = test_data(temp)
 a = np.int16([0, 36*30 , 76*30, 115*30, 156*30,201*30,270*30,316*30, 370*30,435*30])
 
 
@@ -287,8 +284,8 @@ data_lab = []
 
 
 for i in range(a.shape[0]-1):
-    for _ in range(20):
-        sample = torch.from_numpy(get_data_test(randint(a[i], a[i+1])))
+    for _ in range(50):
+        sample = torch.from_numpy(td.get_data_test(randint(a[i], a[i+1])))
         sample = sample.cuda()
         with torch.no_grad():
             output = net(sample)
@@ -330,9 +327,16 @@ def tsne_plot(data = data_t, n_comp = 2, label = label3):
     ax.set_xlabel('X Label')
     ax.set_ylabel('Y Label')
     if n_comp==3:ax.set_zlabel('Z Label')
+    if n_comp==3:ax.set_zlabel('Z Label')
+    
+    
     
     ax.legend(fontsize='large', markerscale=2)
     plt.show()
+    
+    ax.legend(fontsize='large', markerscale=2)
+    plt.show()
+    #plt 2
     
     fig = plt.figure()
     ax = fig.add_subplot()
@@ -350,17 +354,6 @@ def tsne_plot(data = data_t, n_comp = 2, label = label3):
     
     ax.set_xlabel('X Label')
     ax.set_ylabel('Y Label')
-    if n_comp==3:ax.set_zlabel('Z Label')
-    
-    
-    
-    ax.legend(fontsize='large', markerscale=2)
-    plt.show()
 
     
-
-    
-    
-tsne_plot(1/(1+np.exp(-data_t)), 2, data_lab)
-    
-    
+tsne_plot(data_t, 2, data_lab)

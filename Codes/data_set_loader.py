@@ -221,6 +221,62 @@ class dataPrep(Dataset):
 # https://numpy.org/doc/stable/reference/generated/numpy.moveaxis.html
 
 
+class test_data():
+    def __init__(self, temp):
+        self.temp = temp
+        self.mini =  min(len(temp[0]), len(temp[2]), len(temp[1]))
+
+    def get_data_test(self, idx= None):
+        
+        # Time Positives
+        if idx ==None:
+            idx = randint(0,self.mini-100)
+            
+        x_v1 = self.temp[0][idx:idx+16]
+        x_v2 = self.temp[1][idx:idx+16]
+        x_v3 = self.temp[2][idx:idx+16]
+        
+        # Augmentation Positive
+        # Horizontal flip 
+        # x_v1_hf = np.flip(x_v3, axis = 2)
+        # x_v1_br = brightness_augment(x_v1, factor = 1.5)
+        
+        # x_v1_snp =  snp_RGB(x_v1)
+        # # Time Negatives 
+        # idx_n =  randint(0,len(temp[0])-100)
+        # while abs(idx-idx_n)<1200: idx_n = randint(0,len(self.temp[0])-100)
+        
+        # xNIra =  temp[0][idx_n:idx_n+16] # intra negative 
+        
+        # Augmentation Negative 
+        # use tensor append option
+        # ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3, x_v1_hf, x_v1_br, x_v1_snp, xNIra), axis = 0), -1, -4)
+        
+        ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3), axis = 0), -1, -4)
+        return ret.astype(np.float32)/255.0
+    
+    def get_data_Triplet(self, idx = None):
+        
+        idx = randint(0,self.mini-100)
+        aps = random.sample(set([0,1,2]),2)
+        Anchor = self.temp[aps[0]][idx:idx+16]
+    
+        if np.random.uniform()>(0.1-np.exp(-10)):
+            Pos = self.temp[aps[1]][idx:idx+16]
+        else:
+            ps = randint(0,2)
+            if ps ==1:
+                Pos = np.flip(Anchor, axis = 2)
+            elif ps == 2:
+                Pos = brightness_augment(Anchor, factor = 1.5)
+            else:
+                Pos = snp_RGB(Anchor)
+        idx_n =  randint(0, self.mini-100)
+        while abs(idx-idx_n)<1200: idx_n = randint(0, self.mini-100)
+        ns = randint(0,2)
+        Neg = self.temp[ns][idx_n:idx_n+16]
+        ret = np.moveaxis(np.stack((Anchor, Pos, Neg), axis = 0), -1, -4)
+        return ret.astype(np.float32)/255.
 
 
 # sampling for SIMCLR
