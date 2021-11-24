@@ -19,7 +19,6 @@ import glob
 from scipy.io import loadmat
 
 import random
-
 from random import seed, randint
 
 from sklearn.model_selection import train_test_split
@@ -211,13 +210,12 @@ import torch.nn as nn
 
 optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 
-z= torch.from_numpy(np.array(1))
-from losses_PT import TripletLoss1, InfoNceLoss
+
+from losses_PT import TripletLoss1, InfoNceLoss, NT_Xent
 L= InfoNceLoss(1)
 
-z = z.cuda()
 
-net = net.cuda()
+
 tan_m =  nn.Tanh()
 
 
@@ -242,13 +240,13 @@ for sample in data_loader:
 
 
 
-#%% Training Loop 1
+#%% Alternate Training Loop 
 
 tdc =  test_data(temp)
 j = 0
 net.train()
-for _ in range(80000):
-    sample = torch.from_numpy(test_data.get_data_Triplet(None))
+for _ in range(1):
+    sample = torch.from_numpy(tdc.get_data_Triplet())
     sample = sample.cuda()
     optimizer.zero_grad()   # zero the gradient buffers
     output = tan_m(net(sample))
@@ -259,6 +257,33 @@ for _ in range(80000):
         # pdb.set_trace()
     optimizer.step()   #%%
     j= j+1
+    
+#%% SimCLR training loop 
+
+optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
+
+
+L= NT_Xent(batch_size=2, temperature=0.05, world_size=1)
+L= L.cuda()
+
+tdc =  test_data(temp)
+j = 0
+net.train()
+
+
+for _ in range(10000):
+    s1, s2 = torch.from_numpy(tdc.get_SIMCLR_data()[0]), torch.from_numpy(tdc.get_SIMCLR_data()[1]) 
+    s1, s2 =  s1.cuda(), s2.cuda()
+    optimizer.zero_grad()   # zero the gradient buffers
+    o1, o2 = net(s1),  net(s2)
+    loss1 = L(o1, o2)
+    loss1.backward()
+    optimizer.step() 
+    if j%500==0:
+        print(loss1.cpu())
+        # pdb.set_trace()
+    j= j+1
+    
 
 #%% Clear Memory for torch (GPU memory release) (nothing to do with the code)
 # del output
@@ -306,7 +331,7 @@ from sklearn.manifold import TSNE
 
 label3 = np.int16([ i for i in range(h*w)])%3
 
-def tsne_plot(data = data_t, n_comp = 2, label = label3):
+def tsne_plot(data = data_t, n_comp = 2, label1 = label3):
     X_embedded = TSNE(n_components=n_comp, verbose=1).fit_transform(data)
     
     fig = plt.figure()
@@ -318,11 +343,11 @@ def tsne_plot(data = data_t, n_comp = 2, label = label3):
     markers = ['v', 'x', 'o', '.', '>', '<', '1', '2', '3']
     
     for i, g in enumerate(np.unique(label3)):
-        ix = np.where(label == g)
+        ix = np.where(label3 == g)
         if n_comp==3:
             ax.scatter(X_embedded[ix,0], X_embedded[ix,1], X_embedded[ix,2], marker = markers[i], label = g, alpha = 0.8)
         else:
-            ax.scatter(X_embedded[ix,0], X_embedded[ix,1], marker = markers[i], label = g, alpha = 0.8)
+            ax.scatter(X_embedded[ix,0], X_embedded[ix,1], marker = markers[i], label3 = g, alpha = 0.8)
     
     ax.set_xlabel('X Label')
     ax.set_ylabel('Y Label')
@@ -345,12 +370,12 @@ def tsne_plot(data = data_t, n_comp = 2, label = label3):
     # cdict = {0: 'red', 1: 'blue', 2: 'green'}
     markers = ['v', 'x', 'o', '.', '>', '<', '1', '2', '3']
     
-    for i, g in enumerate(np.unique(label)):
-        ix = np.where(label == g)
+    for i, g in enumerate(np.unique(label1)):
+        ix = np.where(label1 == g)
         if n_comp==3:
             ax.scatter(X_embedded[ix,0], X_embedded[ix,1], X_embedded[ix,2], marker = markers[i], label = g, alpha = 0.8)
         else:
-            ax.scatter(X_embedded[ix,0], X_embedded[ix,1], marker = markers[i], label = g, alpha = 0.8)
+            ax.scatter(X_embedded[ix,0], X_embedded[ix,1], marker = markers[i], label1 = g, alpha = 0.8)
     
     ax.set_xlabel('X Label')
     ax.set_ylabel('Y Label')
