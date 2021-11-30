@@ -63,21 +63,53 @@ def set_deterministic(seed=42):
 seed = 42 # any number 
 set_deterministic(seed=seed)
 
+#%% Data Directory
+
+files = []
+# change the path_dir file
+path_dir = '../../../../Dataset/ARL_MULTIVIEW_AR/Pickle_files/' # change to folder
+
+# No change here
+
+save_path = path_dir + '_160_160.pkl'
 
 
 
-#%% Dataset Loader 
+
+dataPath = os.path.join(path_dir, '*.pkl')
+files = glob.glob(dataPath)  # care about the serialization
+
+
+# dataPath = os.path.join(path_dir, '*.pkl')
+
+# files.extend(glob.glob(dataPath))  # care about the serialization
+
+
+#%% Dataset Loader (Small Test)
 temp, dataSet = [], []
 
-with open('../../../../Dataset/ARL_MULTIVIEW_AR/Avijoy_8_26_21/_160_160.pkl', 'rb') as f:
+
+with open(files[1], 'rb') as f:
     temp.append(pickle.load(f))
 
-dataSet.append(dataPrep(temp[0]))
+dataSet.append(dataPrep(temp[1]))
 
 with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27/_160_160.pkl', 'rb') as f:
     temp.append(pickle.load(f))
 
 dataSet.append(dataPrep(temp[1]))
+
+#%% Dataset Loader (final format)
+
+temp, dataSet = [], []
+
+for i in range(len(files)):
+    
+    with open(files[i], 'rb') as f:
+        temp.append(pickle.load(f))
+    
+    dataSet.append(dataPrep(temp[i]))
+
 #%%
 
 concat_dataset = torch.utils.data.ConcatDataset(dataSet)
@@ -85,6 +117,7 @@ concat_dataset = torch.utils.data.ConcatDataset(dataSet)
 data_loader = DataLoader(concat_dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True)
 
 # great it works... now check scalability
+
 #%% Dataloader Check 
 
 s1, s2 = next(iter(data_loader))
@@ -197,9 +230,8 @@ from losses_PT import TripletLoss1, InfoNceLoss, NT_Xent
 L= InfoNceLoss(1)
 
 tan_m =  nn.Tanh()
-#%% Training Loop 1
+#%% Training Loop 1 (dataloader)
 j = 0
-import pdb
 for sample in data_loader:    
     sample = sample.cuda()
     optimizer.zero_grad()   # zero the gradient buffers
@@ -213,7 +245,7 @@ for sample in data_loader:
         # pdb.set_trace()
     j= j+1
     
-#%% Alternate Training Loop 
+#%% Alternate Training Loop (functional)
 
 tdc =  test_data(temp)
 j = 0
@@ -231,7 +263,7 @@ for _ in range(1):
     optimizer.step()   #%%
     j= j+1
     
-#%% SimCLR training loop 
+#%% SimCLR training loop (functional loop not efficient)
 
 optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 
@@ -239,7 +271,7 @@ optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 L= NT_Xent(batch_size=2, temperature=0.05, world_size=1)
 L= L.cuda()
 
-tdc =  test_data(temp)
+tdc =  test_data(temp) # temp should be one pickle file
 j = 0
 net.train()
 
@@ -257,7 +289,31 @@ for _ in range(10000):
         # pdb.set_trace()
     j= j+1
     
+#%% SimCLR Alternate training loop from dataloader
 
+optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
+
+
+L= NT_Xent(batch_size=2, temperature=0.05, world_size=1)
+L= L.cuda()
+
+# tdc =  test_data(temp)
+j = 0
+net.train()
+
+
+for s1,s2 in data_loader:   
+    s1, s2 =  s1[0].cuda(), s2[0].cuda()
+    optimizer.zero_grad()   # zero the gradient buffers
+    o1, o2 = net(s1),  net(s2)
+    loss1 = L(o1, o2)
+    loss1.backward()
+    optimizer.step() 
+    if j%500==0:
+        print(loss1.cpu())
+        # pdb.set_trace()
+    j= j+1
+    
 #%% Clear Memory for torch (GPU memory release) (nothing to do with the code)
 # del output
 # del jj 
