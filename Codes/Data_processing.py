@@ -5,8 +5,6 @@ Created on Thu Oct 14 14:33:09 2021
 
 @author: zahid
 """
-
-
 #%% libraries load
 
 
@@ -42,7 +40,6 @@ from imutils.video import FPS
 
 import imutils
 
-from torch.utils.data import DataLoader, Dataset
 
 
 from threading import Thread
@@ -61,7 +58,7 @@ import time
 
 files = []
 # change the path_dir file
-path_dir = '../../../../Dataset/ARL_MULTIVIEW_AR/Avijoy_8_26_21/' # change to folder
+path_dir = '../../../../Dataset/ARL_MULTIVIEW_AR/nirandi_8_26_21_2/' # change to folder
 
 # No change here
 
@@ -157,20 +154,20 @@ def get_all_frame(files, im_size = (400,400),  slice_info = None, pdb_info = Non
 
 #%% Debug mode
 
-# data = get_all_frame(files[2], slice_info=(slice(100, 900), slice(100,1650), slice(0,3)), pdb_info=None)
-### use pdb true to get the crop information\
+# data = get_all_frame(files[0], slice_info=None, pdb_info=None)
+### use pdb true to get the crop information
 # plt.imshow(data[120])
 # plt.imshow(gray)
 
 #%% Run the Main section
 
-
-
-stFr = [3143, 132, 237] # starting frames (ac, sp, dr)
-
-
 data =[]
-slice_info =  [(slice(100, 1000), slice(300, 1700), slice(0,3)), None, (slice(100, 900), slice(100,1650), slice(0,3))]
+
+stFr = [1287, 372, 457] # starting frames (ac, sp, dr)
+
+slice_info =  [(slice(100, 950), slice(300, 1700), slice(0,3)), None, (slice(150, 950), slice(200,1600), slice(0,3))]
+
+
 for i in range(3):
     data.append(get_all_frame(files[i], im_size=(160,160), slice_info=slice_info[i]))
     
@@ -188,6 +185,7 @@ for i in range(3):
 ## Quick save an load "PICKLE"
 input("pickle save ahead")
 # Saving 
+
 
 
 with open(save_path, 'wb') as f:

@@ -43,6 +43,7 @@ import numpy as np
 import argparse
 import imutils
 import time
+
 #%% Prepare Data Loader
 
 from data_set_loader import dataPrep
@@ -66,19 +67,29 @@ set_deterministic(seed=seed)
 
 
 #%% Dataset Loader 
+temp, dataSet = [], []
 
 with open('../../../../Dataset/ARL_MULTIVIEW_AR/Avijoy_8_26_21/_160_160.pkl', 'rb') as f:
-    temp = pickle.load(f)
+    temp.append(pickle.load(f))
 
-dataSet =  dataPrep(temp)
+dataSet.append(dataPrep(temp[0]))
 
-data_loader = DataLoader(dataSet, batch_size=1, shuffle=False, num_workers=1, pin_memory=True)
+with open('../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27/_160_160.pkl', 'rb') as f:
+    temp.append(pickle.load(f))
 
+dataSet.append(dataPrep(temp[1]))
+#%%
+
+concat_dataset = torch.utils.data.ConcatDataset(dataSet)
+
+data_loader = DataLoader(concat_dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True)
+
+# great it works... now check scalability
 #%% Dataloader Check 
 
-sample = next(iter(data_loader))
+s1, s2 = next(iter(data_loader))
 
-for i in data_loader:
+for i,j in data_loader:
     break
 
 
@@ -89,36 +100,7 @@ sample = next(iter(data_loader))
 jj =  (sample[0]).cuda()
 plt.imshow(np.moveaxis((jj[0,:,0,:,:]).cpu().numpy(), 0,2), vmin=0., vmax=1.)
 
-#%% Random Loss function (add all the loss functions)
-import torch.nn as nn
-import torch.nn.functional as F
 
-class ContrastiveLoss(nn.Module):
-    """
-    Contrastive loss
-    Takes embeddings of two samples and a target label == 1 if samples are from the same class and label == 0 otherwise
-    """
-    def __init__(self, margin):
-        super(ContrastiveLoss, self).__init__()
-        self.margin = margin
-        self.eps = 1e-9
-
-    def forward(self, output1, output2, target, size_average=True):
-        distances = (output2 - output1).pow(2).sum(1)  # squared distances
-        losses = 0.5 * (target.float() * distances +
-                        (1 + -1 * target).float() * F.relu(self.margin - (distances + self.eps).sqrt()).pow(2))
-        return losses.mean() if size_average else losses.sum()   
-
-
-
-
-class ContrastiveLoss2(nn.Module):
-    None
-    
-    
-    
-    
-loss = ContrastiveLoss(1)
 
 
 #%% Network C3D
@@ -166,6 +148,9 @@ elif ModName == 'P3D63' or ModName == 'P3D131':
 
 
 #%% Removing layer from the mdoel 
+import torch.nn as nn
+import torch.nn.functional as F
+
 
 class Identity(nn.Module):
     def __init__(self):
@@ -200,26 +185,18 @@ net.cuda()
     
 #%% Manual test DataLoader (May Not useful)
 
-from data_set_loader import brightness_augment, snp_RGB
-from data_set_loader import test_data
+from data_set_loader import brightness_augment, snp_RGB, test_data
 
 #%% 
 
 import torch.nn as nn
 
-
 optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
-
 
 from losses_PT import TripletLoss1, InfoNceLoss, NT_Xent
 L= InfoNceLoss(1)
 
-
-
 tan_m =  nn.Tanh()
-
-
-
 #%% Training Loop 1
 j = 0
 import pdb
@@ -235,11 +212,7 @@ for sample in data_loader:
         print(loss1.cpu())
         # pdb.set_trace()
     j= j+1
-
-
-
-
-
+    
 #%% Alternate Training Loop 
 
 tdc =  test_data(temp)
