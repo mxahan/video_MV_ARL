@@ -5,7 +5,8 @@ RUN pip install --upgrade pip
 RUN pip --no-cache-dir install \
 		keras \
 		imutils \
-		opencv-python
+		opencv-python \
+		torchsummary
 
 RUN apt-get update ##[edited]
 RUN apt-get install ffmpeg libsm6 libxext6  -y
