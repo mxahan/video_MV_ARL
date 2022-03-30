@@ -1,36 +1,23 @@
-# Import libraries 
+#Import libraries 
 import os
 #os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
-
 #os.environ['KMP_DUPLICATE_LIB_OK']='True'
-
 import torch 
-
 import pickle 
 import matplotlib.pyplot as plt
-
 import numpy as np
-
 import cv2
-
-import  time
+import time
 import glob
-
 from scipy.io import loadmat
-
 import random
 from random import seed, randint
 
 from sklearn.model_selection import train_test_split
-
 import pandas as pd
-
 from imutils.video import FPS
-
 import imutils
-
 from torch.utils.data import DataLoader, Dataset
-
 
 from threading import Thread
 import sys 
@@ -221,7 +208,6 @@ net.cuda()
 from data_set_loader import brightness_augment, snp_RGB, test_data
 
 #%% 
-
 import torch.nn as nn
 
 optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
@@ -362,15 +348,11 @@ label3 = np.int16([ i for i in range(h*w)])%3
 
 def tsne_plot(data = data_t, n_comp = 2, label1 = label3):
     X_embedded = TSNE(n_components=n_comp, verbose=1).fit_transform(data)
-    
     fig = plt.figure()
     ax = fig.add_subplot()
     if n_comp == 3:ax = fig.add_subplot(projection ='3d')
-    
     # cdict = {0: 'red', 1: 'blue', 2: 'green'}
-    
     markers = ['v', 'x', 'o', '.', '>', '<', '1', '2', '3']
-    
     for i, g in enumerate(np.unique(label3)):
         ix = np.where(label3 == g)
         if n_comp==3:
@@ -382,8 +364,6 @@ def tsne_plot(data = data_t, n_comp = 2, label1 = label3):
     ax.set_ylabel('Y Label')
     if n_comp==3:ax.set_zlabel('Z Label')
     if n_comp==3:ax.set_zlabel('Z Label')
-    
-    
     
     ax.legend(fontsize='large', markerscale=2)
     plt.show()

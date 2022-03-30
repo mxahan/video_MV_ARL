@@ -69,20 +69,7 @@ import PIL
 
 class SaltAndPepperNoise(object):
     r""" Implements 'Salt-and-Pepper' noise
-    Adding grain (salt and pepper) noise
     (https://en.wikipedia.org/wiki/Salt-and-pepper_noise)
-
-    assumption: high values = white, low values = black
-    
-    Inputs:
-            - threshold (float):
-            - imgType (str): {"cv2","PIL"}
-            - lowerValue (int): value for "pepper"
-            - upperValue (int): value for "salt"
-            - noiseType (str): {"SnP", "RGB"}
-    Output:
-            - image ({np.ndarray, PIL.Image}): image with 
-                                               noise added
     """
     def __init__(self,
                  treshold:float = 0.005,
@@ -105,7 +92,6 @@ class SaltAndPepperNoise(object):
         if self.imgType == "PIL":
             img = np.array(img)
         if type(img) != np.ndarray: raise TypeError("Image is not of type 'np.ndarray'!")
-        
         if self.noiseType == "SnP":
             random_matrix = np.random.rand(img.shape[0],img.shape[1])
             img[random_matrix>=(1-self.treshold)] = self.upperValue
@@ -114,8 +100,6 @@ class SaltAndPepperNoise(object):
             random_matrix = np.random.random(img.shape)      
             img[random_matrix>=(1-self.treshold)] = self.upperValue
             img[random_matrix<=self.treshold] = self.lowerValue
-
-
         if self.imgType == "cv2": return img
         elif self.imgType == "PIL": return PIL.Image.fromarray(img)
 
@@ -126,33 +110,70 @@ def snp_RGB(vid_fr):
     RGB_noise = SaltAndPepperNoise(noiseType="RGB")
     for i in range(vid_fr.shape[0]): vid_sn[i] = RGB_noise(vid_fr[i])
     return vid_sn 
-    
+
 #%% Pytorch DataLoader [very Crutial]
 
-
-class dataPrep(Dataset):
-    def __init__(self, root_dir):
-        self.temp = root_dir
-        self.all_cam = root_dir
-        self.mini =  min(len(root_dir[0]), len(root_dir[2]), len(root_dir[1])) - 80       
+class data_set_Prep(Dataset):
+    def __init__(self, vid_file, frm_no = 16, mode_no = 1, samp_siz = 5):
+        self.frm_no = frm_no
+        self.temp = vid_file
+        self.mini =  min(len(vid_file[0]), len(vid_file[2]), len(vid_file[1])) - 80  
+        self.mode_no = mode_no
+        self.samp_siz =  samp_siz
+        
     def __len__(self):
-        return len(self.all_cam[0])
+        return self.mini
         
     def __getitem__(self,idx):
-        
-        return self.get_SIMCLR_data()
+        if self.mode_no == 0:
+            return self.get_triplet()
+        elif self.mode_no ==1:
+            return self.get_data_infoNCE()
+        elif self.mode_no == 2:
+            return self.get_al_un(samp_siz =self.samp_siz)
+        else:
+            return self.get_SIMCLR_data(samp_siz = self.samp_siz)
     
-    def get_data1(self):
+    def get_data_infoNCE(self):
+        idx = randint(0,self.mini); aps = random.sample(set([0,1,2]),2)
+        Anchor = self.temp[aps[0]][idx:idx+self.frm_no]
+        if np.random.uniform()>(0.1-np.exp(-10)): Pos = self.temp[aps[1]][idx:idx+self.frm_no]
+        else:
+            ps = randint(0,2)
+            if ps ==1: Pos = np.flip(Anchor, axis = 2)
+            elif ps == 2: Pos = brightness_augment(Anchor, factor = 1.5)
+            else: Pos = snp_RGB(Anchor)
+                # consideration time shifting, single camera consideration
+                # modification of loss function! (hard negative)
+        # Time Negatives 
+        idx_n =  randint(0, self.mini)
+        while abs(idx-idx_n)<1200: idx_n = randint(0, self.mini)
+        Neg = self.temp[0][idx_n:idx_n+self.frm_no]
+        Neg01 = self.temp[1][idx_n:idx_n+self.frm_no] 
+        Neg02 = self.temp[2][idx_n:idx_n+self.frm_no] 
+        idx_n =  randint(0, self.mini)
+        while abs(idx-idx_n)<1200: idx_n = randint(0, self.mini)
+        Neg1 = self.temp[aps[0]][idx_n:idx_n+self.frm_no]
+        Neg11 = self.temp[aps[1]][idx_n:idx_n+self.frm_no]
+        idx_n =  randint(0, self.mini)
+        while abs(idx-idx_n)<1200: idx_n = randint(0, self.mini)
+        Neg2 = self.temp[0][idx_n:idx_n+self.frm_no]   
+        Neg3 = self.temp[1][idx_n:idx_n+self.frm_no]
+        Neg4 = self.temp[2][idx_n:idx_n+self.frm_no]
+        idx_n =  randint(0, self.mini)
+        while abs(idx-idx_n)<1200: idx_n = randint(0, self.mini)    
+        Neg5 = self.temp[aps[0]][idx_n:idx_n+self.frm_no]
+        Neg51 = self.temp[aps[1]][idx_n:idx_n+self.frm_no]
+        ret = np.moveaxis(np.stack((Anchor, Pos, Neg, Neg01,  Neg02, Neg1, Neg11, Neg2, Neg3, Neg4, Neg5, Neg51), axis = 0), -1, -4)    
+        return ret.astype(np.float32)/255.
+    
+    def get_triplet(self):
 
-        idx = randint(0,self.mini)# Time Positives
-        # x_v1 = self.all_cam[0][idx:idx+16]
-        # x_v2 = self.all_cam[1][idx:idx+16]
-        # x_v3 = self.all_cam[2][idx:idx+16]
-        aps = random.sample(set([0,1,2]),2)
-        Anchor = self.all_cam[aps[0]][idx:idx+16]
+        idx = randint(0,self.mini); aps = random.sample(set([0,1,2]),2)
+        Anchor = self.temp[aps[0]][idx:idx+self.frm_no]
 
         if np.random.uniform()>(0.2-np.exp(-10)):
-            Pos = self.all_cam[aps[1]][idx:idx+16]
+            Pos = self.temp[aps[1]][idx:idx+self.frm_no]
         else:
             ps = randint(0,2)
             if ps ==1:
@@ -161,26 +182,18 @@ class dataPrep(Dataset):
                 Pos = brightness_augment(Anchor, factor = 1.5)
             else:
                 Pos = snp_RGB(Anchor)
-
         # Time Negatives 
         idx_n =  randint(0,self.mini)
         while abs(idx-idx_n)<1200: idx_n = randint(0,self.mini)
         ns = randint(0,2)    
-        Neg = self.all_cam[ns][idx_n:idx_n+16]
+        Neg = self.temp[ns][idx_n:idx_n+self.frm_no]
         ret = np.moveaxis(np.stack((Anchor, Pos, Neg), axis = 0), -1, -4)
         return ret.astype(np.float32)/255.
     
-    def get_SIMCLR_data(self):
-        a = self.random_sample(0, self.mini, 1200); s1, s2 = [], []
-        for i in a:
-            aps = random.sample(set([0,1,2]),2)
-            s1.append(self.temp[aps[0]][i:i+16])             
-            if np.random.uniform()>(0.1-np.exp(-10)): s2.append(self.temp[aps[1]][i:i+16])
-            else: 
-                ps = randint(0,2); Anchor = self.temp[aps[0]][i:i+16]
-                if ps ==1: s2.append(np.flip(Anchor, axis = 2))
-                elif ps == 2: s2.append(brightness_augment(Anchor, factor = 1.5))
-                else: s2.append(snp_RGB(Anchor))
+    def get_SIMCLR_data(self, samp_siz):
+        a = self.random_sample(0, self.mini, 1200, samp_siz = samp_siz); s1, s2 = [], []
+        
+        s1, s2 = self.create_two_set(a)
     
         s1, s2 = np.moveaxis(np.stack(s1), -1, -4), np.moveaxis(np.stack(s2), -1, -4)
         return s1.astype(np.float32)/255., s2.astype(np.float32)/255.
@@ -193,30 +206,57 @@ class dataPrep(Dataset):
             a  = np.sort(a); count = count +1  
             if count > 50: print("Did Not get the right Negatives for SIMCLR"); break      
         return a
+    
+    def get_al_un(self, samp_siz):
+        a = random.sample(range(self.mini), samp_siz); s1, s2 = [], []
+        
+        s1, s2 = self.create_two_set(a)
+        
+        s1, s2 = np.moveaxis(np.stack(s1), -1, -4), np.moveaxis(np.stack(s2), -1, -4)
+        return s1.astype(np.float32)/255., s2.astype(np.float32)/255.
+    
+    def create_two_set(self, a):
+        s1, s2 = [], []
+        for i in a:
+            aps = random.sample(set([0,1,2]), 2)
+            s1.append(self.temp[aps[0]][i:i+self.frm_no])             
+            if np.random.uniform()>(0.1-np.exp(-10)): s2.append(self.temp[aps[1]][i:i+self.frm_no])
+            else: 
+                ps = randint(0,2); Anchor = self.temp[aps[0]][i:i+self.frm_no]
+                if ps ==1: s2.append(np.flip(Anchor, axis = 2))
+                elif ps == 2: s2.append(brightness_augment(Anchor, factor = 1.5))
+                else: s2.append(snp_RGB(Anchor))
+        return s1, s2
+            
+        
+    
 # change the data shape using torch.moveaxis, numpy.moveaxis
 # https://pytorch.org/docs/stable/generated/torch.moveaxis.html
 # https://numpy.org/doc/stable/reference/generated/numpy.moveaxis.html
 
 
 class test_data():
-    def __init__(self, temp):
+    def __init__(self, temp, frm_no = 16):
+        self.frm_no = frm_no
         self.temp = temp
         self.mini =  min(len(temp[0]), len(temp[2]), len(temp[1]))- 80
 
     def get_data_test(self, idx= None):
         # Time Positives
-        if idx ==None: idx = randint(0,self.mini)
+        if idx == None: idx = randint(0,self.mini)
             
-        x_v1, x_v2, x_v3 = self.temp[0][idx:idx+16], self.temp[1][idx:idx+16], self.temp[2][idx:idx+16]
+        x_v1, x_v2, x_v3 = self.temp[0][idx:idx+self.frm_no], self.temp[1][idx:idx+self.frm_no], self.temp[2][idx:idx+self.frm_no]
+        
         ret = np.moveaxis(np.stack((x_v1, x_v2, x_v3), axis = 0), -1, -4)
+        
         return ret.astype(np.float32)/255.0
     
     def get_data_Triplet(self, idx = None):        
         idx = randint(0,self.mini)
         aps = random.sample(set([0,1,2]),2)
-        Anchor = self.temp[aps[0]][idx:idx+16]
+        Anchor = self.temp[aps[0]][idx:idx+self.frm_no]
     
-        if np.random.uniform()>(0.1-np.exp(-10)): Pos = self.temp[aps[1]][idx:idx+16]
+        if np.random.uniform()>(0.1-np.exp(-10)): Pos = self.temp[aps[1]][idx:idx+self.frm_no]
         else:
             ps = randint(0,2)
             if ps ==1: Pos = np.flip(Anchor, axis = 2)
@@ -224,14 +264,14 @@ class test_data():
             else: Pos = snp_RGB(Anchor)
         idx_n =  randint(0, self.mini)
         while abs(idx-idx_n)<1200: idx_n = randint(0, self.mini)
-        ns = randint(0,2); Neg = self.temp[ns][idx_n:idx_n+16]
+        ns = randint(0,2); Neg = self.temp[ns][idx_n:idx_n+self.frm_no]
         ret = np.moveaxis(np.stack((Anchor, Pos, Neg), axis = 0), -1, -4)
         return ret.astype(np.float32)/255.
 
     def get_data_info(self):
         idx = randint(0,self.mini); aps = random.sample(set([0,1,2]),2)
-        Anchor = self.temp[aps[0]][idx:idx+16]
-        if np.random.uniform()>(0.1-np.exp(-10)): Pos = self.temp[aps[1]][idx:idx+16]
+        Anchor = self.temp[aps[0]][idx:idx+self.frm_no]
+        if np.random.uniform()>(0.1-np.exp(-10)): Pos = self.temp[aps[1]][idx:idx+self.frm_no]
         else:
             ps = randint(0,2)
             if ps ==1: Pos = np.flip(Anchor, axis = 2)
@@ -242,18 +282,18 @@ class test_data():
         # Time Negatives 
         idx_n =  randint(0, self.mini)
         while abs(idx-idx_n)<1200: idx_n = randint(0, self.mini)
-        Neg = self.temp[aps[0]][idx_n:idx_n+16]  
+        Neg = self.temp[aps[0]][idx_n:idx_n+self.frm_no]  
         idx_n =  randint(0, self.mini)
         while abs(idx-idx_n)<1200: idx_n = randint(0, self.mini)
-        Neg1 = self.temp[aps[0]][idx_n:idx_n+16]
+        Neg1 = self.temp[aps[0]][idx_n:idx_n+self.frm_no]
         idx_n =  randint(0, self.mini)
         while abs(idx-idx_n)<1200: idx_n = randint(0, self.mini)
-        Neg2 = self.temp[0][idx_n:idx_n+16]   
-        Neg3 = self.temp[1][idx_n:idx_n+16]        
-        Neg4 = self.temp[2][idx_n:idx_n+16]        
+        Neg2 = self.temp[0][idx_n:idx_n+self.frm_no]
+        Neg3 = self.temp[1][idx_n:idx_n+self.frm_no]
+        Neg4 = self.temp[2][idx_n:idx_n+self.frm_no]
         idx_n =  randint(0, self.mini)
         while abs(idx-idx_n)<1200: idx_n = randint(0, self.mini)    
-        Neg5 = self.temp[0][idx_n:idx_n+16]
+        Neg5 = self.temp[0][idx_n:idx_n+self.frm_no]
         ret = np.moveaxis(np.stack((Anchor, Pos, Neg, Neg1, Neg2, Neg3, Neg4, Neg5), axis = 0), -1, -4)    
         return ret.astype(np.float32)/255.
     
@@ -261,10 +301,10 @@ class test_data():
         a = self.random_sample(0, self.mini, 1200); s1, s2 = [], []
         for i in a:
             aps = random.sample(set([0,1,2]),2)
-            s1.append(self.temp[aps[0]][i:i+16])             
-            if np.random.uniform()>(0.1-np.exp(-10)): s2.append(self.temp[aps[1]][i:i+16])
+            s1.append(self.temp[aps[0]][i:i+self.frm_no])             
+            if np.random.uniform()>(0.1-np.exp(-10)): s2.append(self.temp[aps[1]][i:i+self.frm_no])
             else: 
-                ps = randint(0,2); Anchor = self.temp[aps[0]][i:i+16]
+                ps = randint(0,2); Anchor = self.temp[aps[0]][i:i+self.frm_no]
                 if ps ==1: s2.append(np.flip(Anchor, axis = 2))
                 elif ps == 2: s2.append(brightness_augment(Anchor, factor = 1.5))
                 else: s2.append(snp_RGB(Anchor))

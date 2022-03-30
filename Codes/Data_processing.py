@@ -7,7 +7,6 @@ Created on Thu Oct 14 14:33:09 2021
 """
 #%% libraries load
 
-
 #import tensorflow as tf
 
 import os
@@ -26,43 +25,25 @@ import cv2
 import  time
 import glob
 
-from scipy.io import loadmat
 
-import random
-
-from random import seed, randint
-
-from sklearn.model_selection import train_test_split
-
-import pandas as pd
 
 from imutils.video import FPS
 
-import imutils
 
 
 
-from threading import Thread
-import sys 
 
-from queue import Queue
 
-from imutils.video import FileVideoStream
-
-import numpy as np
-import argparse
-import imutils
-import time
 
 #%% Directory load data
 
 files = []
 # change the path_dir file
-path_dir = '../../../../Dataset/ARL_MULTIVIEW_AR/nirandi_8_26_21_2/' # change to folder
+path_dir = '../../../../Dataset/ARL_MULTIVIEW_AR/Trial2_7_27/' # change to folder
 
 # No change here
 
-save_path = path_dir + '_160_160.pkl'
+save_path = path_dir + '_300_300.pkl'
 
 
 
@@ -78,13 +59,11 @@ files.extend(glob.glob(dataPath))  # care about the serialization
 
 #%% Import data
 
-
 # hog = cv2.HOGDescriptor()
 # hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 
 # https://www.pyimagesearch.com/2015/11/09/pedestrian-detection-opencv/
 # https://data-flair.training/blogs/python-project-real-time-human-detection-counting/
-
 
 def get_all_frame(files, im_size = (400,400),  slice_info = None, pdb_info = None):
     data = []
@@ -163,14 +142,13 @@ def get_all_frame(files, im_size = (400,400),  slice_info = None, pdb_info = Non
 
 data =[]
 
-stFr = [1287, 372, 457] # starting frames (ac, sp, dr)
+stFr = [5808, 1016, 382] # starting frames (ac, sp, dr)
 
-slice_info =  [(slice(100, 950), slice(300, 1700), slice(0,3)), None, (slice(150, 950), slice(200,1600), slice(0,3))]
+slice_info =  [(slice(20, 1000), slice(600, 1800), slice(0,3)), None, (slice(150, 900), slice(400,1300), slice(0,3))]
 
 
 for i in range(3):
-    data.append(get_all_frame(files[i], im_size=(160,160), slice_info=slice_info[i]))
-    
+    data.append(get_all_frame(files[i], im_size=(300,300), slice_info=slice_info[i]))
     
 
 for i in range(3):
@@ -185,7 +163,6 @@ for i in range(3):
 ## Quick save an load "PICKLE"
 input("pickle save ahead")
 # Saving 
-
 
 
 with open(save_path, 'wb') as f:

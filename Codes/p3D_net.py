@@ -295,7 +295,7 @@ def P3D199(pretrained=False,modality='RGB',**kwargs):
     model = P3D(Bottleneck, [3, 8, 36, 3], modality=modality,**kwargs)
     if pretrained==True:
         if modality=='RGB':
-            pretrained_file='../../Saved_models/p3d_rgb_199.checkpoint.pth.tar'
+            pretrained_file='P3D199_rgb_299x299_model_best.pth.tar'
         elif modality=='Flow':
             pretrained_file='p3d_flow_199.checkpoint.pth.tar'
         weights=torch.load(pretrained_file)['state_dict']
