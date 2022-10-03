@@ -9,11 +9,12 @@ More Models there
 
 
 """
+
+
 # the good stuff: https://github.com/facebookresearch/pytorchvideo
 # go inside pytorchvideo/model/hub : https://github.com/facebookresearch/pytorchvideo/tree/main/pytorchvideo 
 
 import torch
-
 from torchsummary import summary
 
 import json
@@ -34,18 +35,21 @@ from pytorchvideo.transforms import (
     UniformCropVideo
 )
 
+# to avoid the bug of rate limit exceed error
+
+torch.hub._validate_not_a_forked_repo=lambda a,b,c: True
 #%% SlowFast Model (method 1)
 
 
 device = "cuda"
 
 # Pick a pretrained model and load the pretrained weights
-model_name = "slowfast_r50"
+model_name = "slowfast_r18"
 model = torch.hub.load("facebookresearch/pytorchvideo", model=model_name, pretrained=True)
 
 # Set to eval mode and move to desired device
-model = model.to(device)
-model = model.eval()
+# model = model.to(device)
+# model = model.eval()
 
 #%% Some quick notes to access model and Extra Model analysis
 
@@ -144,7 +148,7 @@ if 's1' not in locals():s1=[]
 video_path = "archery.mp4"
 # Select the duration of the clip to load by specifying the start and end duration
 # The start_sec should correspond to where the action occurs in the video
-start_sec = 5
+start_sec = 1
 end_sec = start_sec + clip_duration
 
 # Initialize an EncodedVideo helper class
@@ -162,28 +166,45 @@ inputs2 = video_data["video"]
 inputs2 = [i.to(device)[None, ...] for i in inputs2]
 
 
-#%% Dataset Preparation
+#%% Dataset Preparation Generalized (Nicely working, great)
+vdat= torch.rand(5, 3, 64, 224, 224)
 
-s2 =[[], []]
-for i in s1:
-    f = transform1(i)
-    f = [i.to(device)[None, ...] for i in f]
-    s2[0].append(f[0])
-    s2[1].append(f[1])
+def sf_data_ready(vdat):
+    
+    transform1=Compose(
+        [
+            UniformTemporalSubsample(num_frames),
+            # Lambda(lambda x: x/255.0),
+            # NormalizeVideo(mean, std),
+            # ShortSideScale(
+            #     size=side_size
+            # ),
+            # CenterCropVideo(crop_size),
+            PackPathway()
+        ]
+    )
+    
+    
+    s2 =[[], []]
+    for i in range(vdat.shape[0]):
+        f = transform1(vdat[i])
+        f = [_.to(device)[None, ...] for _ in f]
+        s2[0].append(f[0])
+        s2[1].append(f[1])
+    
+    for i in range(2):s2[i] = torch.cat((s2[i][0:]))
 
-for i in range(2):s2[i] = torch.cat((s2[i][0:]))
-
-
+    return s2
 
 #%%
 
-aa = inputs.copy()
+aa = inputs2.copy()
 
-print(inputs[0].shape)
+print(inputs2[0].shape)
 
 
 with torch.no_grad():
-    preds = model(inputs)
+    preds = model(inputs2)
     
 print(aa[0].shape)
 
@@ -417,6 +438,7 @@ import torch
 if __name__ == "__main__":
     num_classes = 400
     input_tensor = torch.rand(1, 3, 64, 224, 224) # Input shape (work with 256, 256) too!! 
+    # thanks to AdaptiveAVGpool3D
     model1 = resnet50(class_num=num_classes)
     with torch.no_grad():
         output = model1(input_tensor)
@@ -429,11 +451,25 @@ if __name__ == "__main__":
 # https://pytorchvideo.readthedocs.io/en/latest/models.html
 # and 
 # https://github.com/leftthomas/SlowFast/blob/master/train.py
+import torch
 
 import pytorchvideo.models as models
+import torch.nn as nn
 from pytorchvideo.models import create_slowfast
 
-slowfast = models.create_slowfast()
+slowfast = create_slowfast(slowfast_conv_channel_fusion_ratio = 100) #we can go beyond. 101
+## take weights from pytorchvideo model zoo https://pytorchvideo.readthedocs.io/en/latest/model_zoo.html
+pretrain = 1
+if pretrain == 1:
+    wt = torch.load("../../../Saved_models/SLOWFAST_8x8_R50.pyth")
+    slowfast.load_state_dict(wt["model_state"])
+
+
+slowfast.blocks[6] = nn.Sequential(*list(slowfast.blocks[6].children())[:-2], nn.AdaptiveAvgPool3d(1), 
+                                    nn.Flatten(),
+                                nn.Linear(in_features=2304, out_features=1000, bias=True), nn.ReLU()
+                              )
+
 #or # all works in the same way
 # slow_fast = create_slowfast(model_num_class=400) # requires the shape of the list format
 
