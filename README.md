@@ -1,3 +1,5 @@
 # video_MV_ARL
 
-Multiview codes and analysis. 
+Multiview video data
+
+Vivar: View invariant Video action Recognition. 
